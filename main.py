@@ -63,13 +63,45 @@ class MoveHandler(FileSystemEventHandler):
     @staticmethod
     def move_file(destination, entry, name):
         existing_file = os.path.exists(f'{destination}/{name}')
-        # TODO add unique naming for existing file
+        file = entry
         if existing_file:
             logging.warning(f'File {name} already exist in destination {destination}.')
-            pass
-        else:
-            logging.info(f'Moving file {name} to {destination}')
-            shutil.move(entry, destination)
+            new_name = MoveHandler.rename_duplicate(destination, name)
+            new_path = f'{source_dir}/{new_name}'
+            logging.info('Renaming file using os.rename')
+            try:
+                os.rename(file, new_path)
+            except PermissionError:
+                logging.warning('Entry renaming encountered permission error. Failed to move file.')
+            # We renamed the file but still holds reference to old name and path...don't know
+            file = new_path
+
+        logging.info(f'Moving file to {destination}')
+        try:
+            shutil.move(file, destination)
+        except FileExistsError:
+            logging.warning(f'Entry {file} exists in the following destination {destination}. Failed to move file.')
+        except FileNotFoundError:
+            logging.warning(f'Failed to find {entry}. Failed to move file.')
+
+    @staticmethod
+    def rename_duplicate(destination, name):
+        # get the filename split from the .ext
+        name_splitter = name.split('.')
+        file_name = name_splitter[0]
+        ext = name_splitter[1]
+        inc = 1
+
+        while True:
+            exists = os.path.exists(f'{destination}/{file_name}({inc}).{ext}')
+            # Keep looping until we get a filename pattern that does not exist.
+            if not exists:
+                renamed = f'{file_name}({inc}).{ext}'
+                logging.info(f'Renaming duplicate to: {renamed}')
+                break
+            inc += 1
+
+        return renamed
 
 
 if __name__ == '__main__':
